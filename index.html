@@ -4,18 +4,249 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generador de Horarios Universitarios</title>
-    <link rel="stylesheet" href="css/style.css">
-    <script defer src="js/storage.js"></script>
-    <script defer src="js/app.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .header-left h1 {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .header-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            color: white;
+        }
+
+        .datetime-container {
+            text-align: right;
+        }
+
+        .time-display {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            margin-bottom: 0.2rem;
+        }
+
+        .date-display {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 300;
+        }
+
+        nav {
+            margin-top: 1rem;
+            display: flex;
+            gap: 1rem;
+        }
+
+        nav button {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 0.7rem 1.5rem;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        nav button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        nav button.active {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
+        main {
+            padding: 2rem;
+        }
+
+        section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        section.active {
+            display: block;
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 1.5rem;
+            font-size: 1.8rem;
+        }
+
+        .form-group {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        input, select {
+            padding: 0.8rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        ul {
+            list-style: none;
+        }
+
+        li {
+            background: #f8f9fa;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .delete-btn {
+            background: #e74c3c;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+
+        .delete-btn:hover {
+            background: #c0392b;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 0.5rem;
+            text-align: center;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .horario-cell {
+            position: relative;
+            min-height: 40px;
+            cursor: pointer;
+        }
+
+        .horario-cell:hover {
+            background: #f0f0f0;
+        }
+
+        .materia-asignada {
+            background: #e8f5e8;
+            border-left: 4px solid #4CAF50;
+            padding: 0.3rem;
+            margin: 0.1rem 0;
+            font-size: 0.85rem;
+        }
+
+        footer {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            text-align: center;
+            padding: 1rem;
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            header {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .header-right {
+                align-items: center;
+            }
+
+            .form-group {
+                flex-direction: column;
+            }
+
+            nav {
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+        }
+    </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body>
     <header>
-        <h1>Asignacion de Horarios 2025-3 | Universidad del Golfo</h1>
+        <div class="header-left">
+            <h1>Asignacion de Horarios 2025-3 | Universidad del Golfo</h1>
+        </div>
+        <div class="header-right">
+            <div class="datetime-container">
+                <div class="time-display" id="current-time">00:00:00</div>
+                <div class="date-display" id="current-date">Fecha</div>
+            </div>
+        </div>
         <nav>
-            <button id="nav-carreras">Carreras</button>
+            <button id="nav-carreras" class="active">Carreras</button>
             <button id="nav-materias">Materias</button>
             <button id="nav-maestros">Maestros</button>
             <button id="nav-horarios">Horarios</button>
@@ -80,7 +311,7 @@
                             <th>Hora</th>
                             <th>Lunes</th>
                             <th>Martes</th>
-                            <th>Miercoles</th>
+                            <th>Miércoles</th>
                             <th>Jueves</th>
                             <th>Viernes</th>
                         </tr>
@@ -113,7 +344,182 @@
 
     <footer>
         <p>&copy; 2025 Universidad del Golfo | Created by Christian Duran | christian.duran@nube.unadmexico.mx</p>
-
     </footer>
+
+    <script>
+        // Reloj en tiempo real
+        function updateDateTime() {
+            const now = new Date();
+            
+            // Formatear hora
+            const timeOptions = {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+                timeZone: 'America/Mexico_City'
+            };
+            const timeString = now.toLocaleTimeString('es-MX', timeOptions);
+            
+            // Formatear fecha
+            const dateOptions = {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                timeZone: 'America/Mexico_City'
+            };
+            const dateString = now.toLocaleDateString('es-MX', dateOptions);
+            
+            // Actualizar elementos
+            document.getElementById('current-time').textContent = timeString;
+            document.getElementById('current-date').textContent = dateString;
+        }
+
+        // Actualizar cada segundo
+        setInterval(updateDateTime, 1000);
+        // Ejecutar inmediatamente
+        updateDateTime();
+
+        // Funcionalidad básica de navegación
+        document.addEventListener('DOMContentLoaded', function() {
+            const navButtons = document.querySelectorAll('nav button');
+            const sections = document.querySelectorAll('main section');
+
+            navButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const targetId = this.id.replace('nav-', 'section-');
+                    
+                    // Remover clase active de todos los botones y secciones
+                    navButtons.forEach(btn => btn.classList.remove('active'));
+                    sections.forEach(section => section.classList.remove('active'));
+                    
+                    // Agregar clase active al botón clickeado y su sección correspondiente
+                    this.classList.add('active');
+                    document.getElementById(targetId).classList.add('active');
+                });
+            });
+
+            // Funcionalidad básica para agregar carreras
+            const btnAgregarCarrera = document.getElementById('btn-agregar-carrera');
+            const inputCarrera = document.getElementById('input-carrera');
+            const inputGrado = document.getElementById('input-grado-carrera');
+            const inputGrupo = document.getElementById('input-grupo-carrera');
+            const listaCarreras = document.getElementById('lista-carreras');
+
+            btnAgregarCarrera.addEventListener('click', function() {
+                const carrera = inputCarrera.value.trim();
+                const grado = inputGrado.value.trim();
+                const grupo = inputGrupo.value.trim();
+
+                if (carrera && grado && grupo) {
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <span>${carrera} - ${grado}° ${grupo}</span>
+                        <button class="delete-btn" onclick="this.parentElement.remove()">Eliminar</button>
+                    `;
+                    listaCarreras.appendChild(li);
+
+                    // Limpiar inputs
+                    inputCarrera.value = '';
+                    inputGrado.value = '';
+                    inputGrupo.value = '';
+                }
+            });
+
+            // Funcionalidad básica para agregar materias
+            const btnAgregarMateria = document.getElementById('btn-agregar-materia');
+            const inputMateria = document.getElementById('input-materia');
+            const inputEspecialidad = document.getElementById('input-especialidad-materia');
+            const inputAula = document.getElementById('input-aula-materia');
+            const listaMaterias = document.getElementById('lista-materias');
+
+            btnAgregarMateria.addEventListener('click', function() {
+                const materia = inputMateria.value.trim();
+                const especialidad = inputEspecialidad.value.trim();
+                const aula = inputAula.value.trim();
+
+                if (materia && especialidad && aula) {
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <span>${materia} - ${especialidad} (${aula})</span>
+                        <button class="delete-btn" onclick="this.parentElement.remove()">Eliminar</button>
+                    `;
+                    listaMaterias.appendChild(li);
+
+                    // Limpiar inputs
+                    inputMateria.value = '';
+                    inputEspecialidad.value = '';
+                    inputAula.value = '';
+                }
+            });
+
+            // Funcionalidad básica para agregar maestros
+            const btnAgregarMaestro = document.getElementById('btn-agregar-maestro');
+            const inputNombreMaestro = document.getElementById('input-nombre-maestro');
+            const inputEspecialidadMaestro = document.getElementById('input-especialidad-maestro');
+            const listaMaestros = document.getElementById('lista-maestros');
+
+            btnAgregarMaestro.addEventListener('click', function() {
+                const nombre = inputNombreMaestro.value.trim();
+                const especialidad = inputEspecialidadMaestro.value.trim();
+
+                if (nombre && especialidad) {
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <span>${nombre} - ${especialidad}</span>
+                        <button class="delete-btn" onclick="this.parentElement.remove()">Eliminar</button>
+                    `;
+                    listaMaestros.appendChild(li);
+
+                    // Limpiar inputs
+                    inputNombreMaestro.value = '';
+                    inputEspecialidadMaestro.value = '';
+                }
+            });
+
+            // Generar tabla de horarios básica
+            function generarTablaHorarios() {
+                const tablaSemanal = document.getElementById('tabla-horario-semanal').querySelector('tbody');
+                const tablaSabatino = document.getElementById('tabla-horario-sabatino').querySelector('tbody');
+                
+                // Horarios de 7:00 AM a 9:00 PM
+                const horas = [];
+                for (let i = 7; i <= 21; i++) {
+                    const hora = i.toString().padStart(2, '0') + ':00';
+                    horas.push(hora);
+                }
+
+                // Generar filas para tabla semanal (Lunes a Viernes)
+                tablaSemanal.innerHTML = '';
+                horas.forEach(hora => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${hora}</td>
+                        <td class="horario-cell" data-dia="lunes" data-hora="${hora}"></td>
+                        <td class="horario-cell" data-dia="martes" data-hora="${hora}"></td>
+                        <td class="horario-cell" data-dia="miercoles" data-hora="${hora}"></td>
+                        <td class="horario-cell" data-dia="jueves" data-hora="${hora}"></td>
+                        <td class="horario-cell" data-dia="viernes" data-hora="${hora}"></td>
+                    `;
+                    tablaSemanal.appendChild(tr);
+                });
+
+                // Generar filas para tabla sabatina
+                tablaSabatino.innerHTML = '';
+                horas.forEach(hora => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${hora}</td>
+                        <td class="horario-cell" data-dia="sabado" data-hora="${hora}"></td>
+                    `;
+                    tablaSabatino.appendChild(tr);
+                });
+            }
+
+            // Generar tablas al cargar la página
+            generarTablaHorarios();
+        });
+    </script>
 </body>
 </html>
