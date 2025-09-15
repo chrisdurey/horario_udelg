@@ -1,4 +1,4 @@
-/* Main application logic - versión corregida con nueva lógica de conflictos */
+/* Main application logic - versión entregada con mejoras solicitadas */
 
 // Navigation
 const sections = document.querySelectorAll('main section');
@@ -496,46 +496,38 @@ function abrirModalAsignacion(celda) {
     };
 }
 
-// =================== NUEVA LÓGICA DE CONFLICTOS ===================
-// Save assignment from modal with corrected conflict checks
+// Save assignment from modal with conflict checks
 function guardarAsignacionModal(celda) {
     const materiaId = document.getElementById('modal-select-materia').value;
     const maestroId = document.getElementById('modal-select-maestro').value;
-    if (!materiaId || !maestroId) { 
-        alert('Seleccione materia y maestro'); 
-        return; 
-    }
+    if (!materiaId || !maestroId) { alert('Seleccione materia y maestro'); return; }
 
     const materias = safeGetArray('materias');
     const maestros = safeGetArray('maestros');
     const materia = materias.find(m=>m.id===materiaId);
     const maestro = maestros.find(m=>m.id===maestroId);
-    if (!materia || !maestro) { 
-        alert('Error al obtener materia o maestro'); 
+    if (!materia || !maestro) { alert('Error al obtener materia o maestro'); return; }
+
+    // Obtener carrera actual
+    const carreraActualId = selectCarreraHorario.value;
+    if (!carreraActualId) { 
+        alert('Debe seleccionar una carrera antes de asignar horarios'); 
         return; 
     }
 
-    // Obtener la carrera actual seleccionada
-    const carreraActualId = selectCarreraHorario.value;
-    if (!carreraActualId) {
-        alert('Debe seleccionar una carrera antes de asignar horarios');
-        return;
-    }
-
+    // Determine slot descriptor
     const dia = celda.dataset.dia;
-    const index = parseInt(celda.dataset.index, 10);
+    const index = parseInt(celda.dataset.index,10);
     
-    // NUEVA LÓGICA: Revisar conflictos SOLO entre diferentes carreras
+    // NUEVA LÓGICA DE CONFLICTOS: Solo verificar conflictos entre DIFERENTES carreras
     const horariosGuardados = safeGetArray('horarios');
     
-    // Función para verificar conflictos en otros horarios de DIFERENTES carreras
-    function verificarConflictoEnOtrasCarreras(schedule, scheduleCarreraId) {
-        // Solo verificar si es una carrera DIFERENTE a la actual
-        if (scheduleCarreraId === carreraActualId) {
-            return null; // No hay conflicto dentro de la misma carrera
-        }
-
-        // Verificar conflictos en horario semanal
+    // Función para verificar conflictos con otras carreras en el mismo horario
+    function verificarConflictoConOtrasCarreras(schedule, scheduleCarreraId) {
+        // Solo verificar si es una carrera diferente
+        if (scheduleCarreraId === carreraActualId) return null;
+        
+        // Verificar en semanal
         if (schedule.semanal) {
             const days = ['lunes','martes','miercoles','jueves','viernes'];
             for (let d of days) {
@@ -543,85 +535,433 @@ function guardarAsignacionModal(celda) {
                 const cell = arr[index];
                 if (!cell) continue;
                 
-                // Conflicto de maestro: el maestro no puede estar en dos lugares al mismo tiempo
+                // Verificar conflicto de maestro (misma hora, diferente carrera)
                 if (cell.maestroId === maestroId) {
                     return { 
                         type: 'maestro', 
-                        carrera: scheduleCarreraId,
+                        schedule, 
                         dia: d,
-                        hora: (dia === 'sabado') ? tiemposSabatino[index] : tiemposSemana[index]
+                        carreraId: scheduleCarreraId
                     };
                 }
                 
-                // Conflicto de aula: no se pueden usar la misma aula al mismo tiempo
-                const mat = (cell.materiaId) ? materias.find(m=>m.id===cell.materiaId) : null;
-                if (mat && mat.aula && materia.aula && mat.aula === materia.aula && mat.aula.trim() !== '') {
+                // Verificar conflicto de aula (misma hora, misma aula, diferente carrera)
+                const mat = (cell.materiaId) ? safeGetArray('materias').find(m=>m.id===cell.materiaId) : null;
+                if (mat && mat.aula && materia.aula && mat.aula === materia.aula) {
                     return { 
                         type: 'aula', 
-                        carrera: scheduleCarreraId,
+                        schedule, 
                         dia: d,
-                        hora: (dia === 'sabado') ? tiemposSabatino[index] : tiemposSemana[index],
-                        aula: mat.aula
+                        carreraId: scheduleCarreraId
                     };
                 }
             }
         }
         
-        // Verificar conflictos en horario sabatino
-        if (schedule.sabatino && dia === 'sabado') {
+        // Verificar en sabatino
+        if (schedule.sabatino) {
             const cell = schedule.sabatino[index];
             if (cell) {
                 if (cell.maestroId === maestroId) {
                     return { 
                         type: 'maestro', 
-                        carrera: scheduleCarreraId,
+                        schedule, 
                         dia: 'sabado',
-                        hora: tiemposSabatino[index]
+                        carreraId: scheduleCarreraId
                     };
                 }
-                
-                const mat = (cell.materiaId) ? materias.find(m=>m.id===cell.materiaId) : null;
-                if (mat && mat.aula && materia.aula && mat.aula === materia.aula && mat.aula.trim() !== '') {
+                const mat = (cell.materiaId) ? safeGetArray('materias').find(m=>m.id===cell.materiaId) : null;
+                if (mat && mat.aula && materia.aula && mat.aula === materia.aula) {
                     return { 
                         type: 'aula', 
-                        carrera: scheduleCarreraId,
+                        schedule, 
                         dia: 'sabado',
-                        hora: tiemposSabatino[index],
-                        aula: mat.aula
+                        carreraId: scheduleCarreraId
                     };
                 }
             }
         }
-        
         return null;
     }
 
-    // Verificar conflictos en todos los horarios guardados de OTRAS carreras
-    for (let horario of horariosGuardados) {
-        const conflict = verificarConflictoEnOtrasCarreras(horario, horario.carreraId);
+    // Verificar conflictos con horarios guardados de otras carreras
+    const carreras = safeGetArray('carreras');
+    for (let horarioGuardado of horariosGuardados) {
+        const conflict = verificarConflictoConOtrasCarreras(horarioGuardado, horarioGuardado.carreraId);
         if (conflict) {
-            const carreras = safeGetArray('carreras');
-            const conflictCarrera = carreras.find(c => c.id === conflict.carrera);
-            const carreraNombre = conflictCarrera ? 
-                `${conflictCarrera.nombre} (G:${conflictCarrera.grado||'-'} - ${conflictCarrera.grupo||'-'})` : 
-                'Carrera desconocida';
-                
+            const carreraConflicto = carreras.find(c => c.id === conflict.carreraId);
+            const nombreCarrera = carreraConflicto ? carreraConflicto.nombre : 'Carrera desconocida';
+            
             if (conflict.type === 'maestro') {
-                alert(`CONFLICTO: El maestro "${maestro.nombre}" ya tiene clase el ${conflict.dia} a las ${conflict.hora} en la carrera "${carreraNombre}". Un maestro no puede estar en dos lugares al mismo tiempo.`);
+                alert(`Conflicto detectado: El maestro ${maestro.nombre} ya tiene una clase asignada en el mismo horario (${tiemposSemana[index] || tiemposSabatino[index]}) para la carrera "${nombreCarrera}". Un maestro no puede estar en dos lugares al mismo tiempo.`);
             } else if (conflict.type === 'aula') {
-                alert(`CONFLICTO: El aula "${conflict.aula}" ya está ocupada el ${conflict.dia} a las ${conflict.hora} en la carrera "${carreraNombre}". No se puede usar la misma aula al mismo tiempo.`);
+                alert(`Conflicto detectado: El aula ${materia.aula} ya está ocupada en el mismo horario (${tiemposSemana[index] || tiemposSabatino[index]}) por otra carrera ("${nombreCarrera}").`);
             }
             return;
         }
     }
 
-    // Si no hay conflictos con otras carreras, permitir la asignación
+    // Si pasa todas las verificaciones, asignar a la celda
     celda.dataset.materiaId = materiaId;
     celda.dataset.maestroId = maestroId;
     celda.innerHTML = `<strong>${materia.nombre}</strong><br><small>${maestro.nombre} - ${materia.aula || ''}</small>`;
 
     actualizarHorarioTemporal();
 }
-// =================== FIN NUEVA LÓGICA DE CONFLICTOS ===================
 
-// Update horarioTemp
+// Update horarioTemporal from DOM
+function actualizarHorarioTemporal() {
+    // ensure structure
+    horarioTemporal.semanal = { lunes: [], martes: [], miercoles: [], jueves: [], viernes: [] };
+    // semanal
+    const celdasSemanales = document.querySelectorAll('#tabla-horario-semanal .celda-horario');
+    celdasSemanales.forEach(celda => {
+        const dia = celda.dataset.dia;
+        const index = parseInt(celda.dataset.index,10);
+        if (!horarioTemporal.semanal[dia]) horarioTemporal.semanal[dia] = [];
+        while (horarioTemporal.semanal[dia].length <= index) horarioTemporal.semanal[dia].push({});
+        horarioTemporal.semanal[dia][index] = { materiaId: celda.dataset.materiaId || null, maestroId: celda.dataset.maestroId || null };
+    });
+    // sabatino
+    horarioTemporal.sabatino = [];
+    const celdasSabatinas = document.querySelectorAll('#tabla-horario-sabatino .celda-horario');
+    celdasSabatinas.forEach(celda => {
+        const index = parseInt(celda.dataset.index,10);
+        while (horarioTemporal.sabatino.length <= index) horarioTemporal.sabatino.push({});
+        horarioTemporal.sabatino[index] = { materiaId: celda.dataset.materiaId || null, maestroId: celda.dataset.maestroId || null };
+    });
+}
+
+// Load horario object into tables
+function cargarHorarioEnTablas(horario) {
+    if (!horario) return;
+    // clear first
+    generarTablaHorarioSemanal();
+    generarTablaHorarioSabatino();
+    // semanal
+    const celdasSemanales = document.querySelectorAll('#tabla-horario-semanal .celda-horario');
+    celdasSemanales.forEach(celda => {
+        const dia = celda.dataset.dia;
+        const index = parseInt(celda.dataset.index,10);
+        if (horario.semanal && horario.semanal[dia] && horario.semanal[dia][index]) {
+            const asign = horario.semanal[dia][index];
+            if (asign && asign.materiaId && asign.maestroId) {
+                const materia = Storage.get('materias').find(m=>m.id===asign.materiaId);
+                const maestro = Storage.get('maestros').find(m=>m.id===asign.maestroId);
+                if (materia && maestro) {
+                    celda.dataset.materiaId = asign.materiaId;
+                    celda.dataset.maestroId = asign.maestroId;
+                    celda.innerHTML = `<strong>${materia.nombre}</strong><br><small>${maestro.nombre} - ${materia.aula||''}</small>`;
+                }
+            }
+        }
+    });
+    // sabatino
+    const celdasSabatinas = document.querySelectorAll('#tabla-horario-sabatino .celda-horario');
+    celdasSabatinas.forEach(celda => {
+        const index = parseInt(celda.dataset.index,10);
+        if (horario.sabatino && horario.sabatino[index]) {
+            const asign = horario.sabatino[index];
+            if (asign && asign.materiaId && asign.maestroId) {
+                const materia = Storage.get('materias').find(m=>m.id===asign.materiaId);
+                const maestro = Storage.get('maestros').find(m=>m.id===asign.maestroId);
+                if (materia && maestro) {
+                    celda.dataset.materiaId = asign.materiaId;
+                    celda.dataset.maestroId = asign.maestroId;
+                    celda.innerHTML = `<strong>${materia.nombre}</strong><br><small>${maestro.nombre} - ${materia.aula||''}</small>`;
+                }
+            }
+        }
+    });
+    // sync temporal and current id
+    horarioTemporal = JSON.parse(JSON.stringify(horario));
+}
+
+// Save horario (create or update)
+if (btnGuardarHorario) {
+    btnGuardarHorario.addEventListener('click', () => {
+        const carreraId = selectCarreraHorario.value;
+        if (!carreraId) { alert('Seleccione una carrera antes de guardar.'); return; }
+        actualizarHorarioTemporal();
+        const horarios = safeGetArray('horarios');
+        // find by carrera
+        const existente = horarios.find(h => h.carreraId === carreraId);
+        if (existente) {
+            // update existente
+            existente.semanal = horarioTemporal.semanal;
+            existente.sabatino = horarioTemporal.sabatino;
+            Storage.update('horarios', existente.id, existente);
+            currentHorarioId = existente.id;
+        } else {
+            const nuevo = { id: generateId(), carreraId: carreraId, semanal: horarioTemporal.semanal, sabatino: horarioTemporal.sabatino, createdAt: new Date().toISOString() };
+            Storage.add('horarios', nuevo);
+            currentHorarioId = nuevo.id;
+        }
+        cargarHorariosGuardadosSelect();
+        alert('Horario guardado correctamente.');
+    });
+}
+
+// Update horario - ensures existing horario is updated (does not create duplicates)
+if (btnActualizarHorario) {
+    btnActualizarHorario.addEventListener('click', () => {
+        if (!currentHorarioId) { alert('No hay horario cargado para actualizar. Cargue uno o guarde primero.'); return; }
+        actualizarHorarioTemporal();
+        const horarios = safeGetArray('horarios');
+        const index = horarios.findIndex(h => h.id === currentHorarioId);
+        if (index === -1) { alert('Horario no encontrado en almacenamiento.'); return; }
+        horarios[index].semanal = horarioTemporal.semanal;
+        horarios[index].sabatino = horarioTemporal.sabatino;
+        horarios[index].updatedAt = new Date().toISOString();
+        Storage.set('horarios', horarios);
+        cargarHorariosGuardadosSelect();
+        alert('Horario actualizado correctamente.');
+    });
+}
+
+// On carrer select change: regenerate tables and load saved horario if exists
+if (selectCarreraHorario) {
+    selectCarreraHorario.addEventListener('change', () => {
+        const carreraId = selectCarreraHorario.value;
+        generarTablaHorarioSemanal();
+        generarTablaHorarioSabatino();
+        limpiarHorarioTemporal();
+        currentHorarioId = null;
+        if (!carreraId) return;
+        const horarios = safeGetArray('horarios');
+        const guardado = horarios.find(h => h.carreraId === carreraId);
+        if (guardado) {
+            cargarHorarioEnTablas(guardado);
+            currentHorarioId = guardado.id;
+        }
+    });
+}
+
+// Load saved horarios into select
+function cargarHorariosGuardadosSelect() {
+    const select = selectHorariosGuardados;
+    if (!select) return;
+    select.innerHTML = '<option value="">-- Ninguno --</option>';
+    const horarios = safeGetArray('horarios');
+    const carreras = safeGetArray('carreras');
+    horarios.forEach(h => {
+        const carrera = carreras.find(c=>c.id===h.carreraId);
+        const text = carrera ? `${carrera.nombre} (${carrera.grado||'-'}${carrera.grupo?(' - '+carrera.grupo):''})` : `Horario ${h.id}`;
+        const opt = document.createElement('option');
+        opt.value = h.id;
+        opt.textContent = text;
+        select.appendChild(opt);
+    });
+}
+
+// Load selected saved horario on button click
+if (btnCargarHorario) {
+    btnCargarHorario.addEventListener('click', () => {
+        const id = selectHorariosGuardados.value;
+        if (!id) { alert('Seleccione un horario guardado.'); return; }
+        const horario = Storage.get('horarios').find(h=>h.id===id);
+        if (!horario) { alert('Horario no encontrado.'); return; }
+        // set carrera select to that carrera
+        selectCarreraHorario.value = horario.carreraId;
+        generarTablaHorarioSemanal();
+        generarTablaHorarioSabatino();
+        cargarHorarioEnTablas(horario);
+        currentHorarioId = horario.id;
+        alert('Horario cargado para edición.');
+    });
+}
+
+// Delete selected saved horario
+if (btnEliminarHorario) {
+    btnEliminarHorario.addEventListener('click', () => {
+        const id = selectHorariosGuardados.value;
+        if (!id) { alert('Seleccione un horario guardado.'); return; }
+        if (!confirm('¿Eliminar horario seleccionado?')) return;
+        Storage.delete('horarios', id);
+        cargarHorariosGuardadosSelect();
+        alert('Horario eliminado.');
+    });
+}
+
+// Preview - render a friendly visual of the current horarioTemporal
+if (btnPreviewHorario) {
+    btnPreviewHorario.addEventListener('click', () => {
+        actualizarHorarioTemporal();
+        renderPreview();
+    });
+}
+
+function renderPreview() {
+    // Build a clean visual preview with headings and both tables
+    const carreras = safeGetArray('carreras');
+    const carrera = carreras.find(c=>c.id===selectCarreraHorario.value);
+    const carreraTitle = carrera ? `${carrera.nombre} (G:${carrera.grado||'-'} - ${carrera.grupo||'-'})` : 'Carrera: --';
+    const html = [];
+    html.push(`<div class="preview-title"><h3>Preview de Horario</h3><div class="small-muted">${carreraTitle}</div></div>`);
+    // semanal table
+    html.push('<table style="width:100%;border-collapse:collapse;margin-bottom:12px;"><thead><tr style="background:#0077c8;color:#fff;"><th>Hora</th><th>Lun</th><th>Mar</th><th>Mie</th><th>Jue</th><th>Vie</th></tr></thead><tbody>');
+    for (let i=0;i<tiemposSemana.length;i++) {
+        if (i===3) {
+            html.push(`<tr style="background:#fff3cd;font-weight:700;"><td>09:30</td><td colspan="5">RECESO 09:30 - 10:00</td></tr>`);
+        }
+        const hora = tiemposSemana[i];
+        html.push(`<tr><td>${hora}</td>`);
+        ['lunes','martes','miercoles','jueves','viernes'].forEach(dia => {
+            const cell = (horarioTemporal.semanal && horarioTemporal.semanal[dia] && horarioTemporal.semanal[dia][i]) ? horarioTemporal.semanal[dia][i] : {};
+            if (cell && cell.materiaId && cell.maestroId) {
+                const materia = Storage.get('materias').find(m=>m.id===cell.materiaId);
+                const maestro = Storage.get('maestros').find(m=>m.id===cell.maestroId);
+                const txt = `${materia ? materia.nombre : 'Materia'} / ${maestro ? maestro.nombre : 'Maestro'} ${materia && materia.aula ? '('+materia.aula+')' : ''}`;
+                html.push(`<td>${txt}</td>`);
+            } else {
+                html.push('<td></td>');
+            }
+        });
+        html.push('</tr>');
+    }
+    html.push('</tbody></table>');
+
+    // sabatino preview
+    html.push('<h4 style="margin:8px 0 6px 0;color:#00274d;">Sabatino</h4>');
+    html.push('<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:#0077c8;color:#fff;"><th>Hora</th><th>Sáb</th></tr></thead><tbody>');
+    for (let i=0;i<tiemposSabatino.length;i++) {
+        const hora = tiemposSabatino[i];
+        html.push(`<tr><td>${hora}</td>`);
+        const cell = (horarioTemporal.sabatino && horarioTemporal.sabatino[i]) ? horarioTemporal.sabatino[i] : {};
+        if (cell && cell.materiaId && cell.maestroId) {
+            const materia = Storage.get('materias').find(m=>m.id===cell.materiaId);
+            const maestro = Storage.get('maestros').find(m=>m.id===cell.maestroId);
+            const txt = `${materia ? materia.nombre : 'Materia'} / ${maestro ? maestro.nombre : 'Maestro'} ${materia && materia.aula ? '('+materia.aula+')' : ''}`;
+            html.push(`<td>${txt}</td>`);
+        } else {
+            html.push('<td></td>');
+        }
+        html.push('</tr>');
+    }
+    html.push('</tbody></table>');
+    previewContainer.innerHTML = html.join('');
+}
+
+// Export to Excel - professional layout
+if (btnExportExcel) {
+    btnExportExcel.addEventListener('click', () => {
+        actualizarHorarioTemporal();
+        const workbook = XLSX.utils.book_new();
+        // Semanal sheet
+        const header = ['Hora','Lunes','Martes','Miércoles','Jueves','Viernes'];
+        const rows = [];
+        for (let i=0;i<tiemposSemana.length;i++) {
+            if (i===3) {
+                rows.push(['09:30','RECESO 09:30 - 10:00','','','','']);
+            }
+            const fila = [tiemposSemana[i]];
+            ['lunes','martes','miercoles','jueves','viernes'].forEach(dia => {
+                const cell = (horarioTemporal.semanal && horarioTemporal.semanal[dia] && horarioTemporal.semanal[dia][i]) ? horarioTemporal.semanal[dia][i] : {};
+                if (cell && cell.materiaId && cell.maestroId) {
+                    const materia = Storage.get('materias').find(m=>m.id===cell.materiaId);
+                    const maestro = Storage.get('maestros').find(m=>m.id===cell.maestroId);
+                    fila.push(`${materia ? materia.nombre : ''} / ${maestro ? maestro.nombre : ''} ${materia && materia.aula ? '('+materia.aula+')' : ''}`);
+                } else fila.push('');
+            });
+            rows.push(fila);
+        }
+        const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+        XLSX.utils.book_append_sheet(workbook, ws, 'Semanal');
+
+        // Sabatino sheet
+        const headerS = ['Hora','Sábado'];
+        const rowsS = tiemposSabatino.map((hora,i)=>{
+            const cell = (horarioTemporal.sabatino && horarioTemporal.sabatino[i]) ? horarioTemporal.sabatino[i] : {};
+            if (cell && cell.materiaId && cell.maestroId) {
+                const materia = Storage.get('materias').find(m=>m.id===cell.materiaId);
+                const maestro = Storage.get('maestros').find(m=>m.id===cell.maestroId);
+                return [hora, `${materia ? materia.nombre : ''} / ${maestro ? maestro.nombre : ''} ${materia && materia.aula ? '('+materia.aula+')' : ''}`];
+            }
+            return [hora,''];
+        });
+        const ws2 = XLSX.utils.aoa_to_sheet([headerS, ...rowsS]);
+        XLSX.utils.book_append_sheet(workbook, ws2, 'Sabatino');
+
+        const carrera = Storage.get('carreras').find(c=>c.id===selectCarreraHorario.value);
+        const fileName = carrera ? `${carrera.nombre}_Horario.xlsx` : 'Horario.xlsx';
+        XLSX.writeFile(workbook, fileName);
+    });
+}
+
+// Export to PDF - professional format using autoTable
+if (btnExportPDF) {
+    btnExportPDF.addEventListener('click', () => {
+        actualizarHorarioTemporal();
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('landscape');
+        const title = 'Horario - Universidad del Golfo';
+        doc.setFontSize(14);
+        doc.text(title, 14, 16);
+
+        // Semanal table data for autoTable
+        const head = [['Hora','Lunes','Martes','Miércoles','Jueves','Viernes']];
+        const body = [];
+        for (let i=0;i<tiemposSemana.length;i++) {
+            if (i===3) {
+                body.push(['09:30','RECESO 09:30 - 10:00','','','','']);
+            }
+            const fila = [tiemposSemana[i]];
+            ['lunes','martes','miercoles','jueves','viernes'].forEach(dia => {
+                const cell = (horarioTemporal.semanal && horarioTemporal.semanal[dia] && horarioTemporal.semanal[dia][i]) ? horarioTemporal.semanal[dia][i] : {};
+                if (cell && cell.materiaId && cell.maestroId) {
+                    const materia = Storage.get('materias').find(m=>m.id===cell.materiaId);
+                    const maestro = Storage.get('maestros').find(m=>m.id===cell.maestroId);
+                    fila.push(`${materia ? materia.nombre : ''}\n${maestro ? maestro.nombre : ''}${materia && materia.aula ? '\nAula: '+materia.aula : ''}`);
+                } else fila.push('');
+            });
+            body.push(fila);
+        }
+        doc.autoTable({ startY: 24, head: head, body: body, styles:{fontSize:9}, headStyles:{fillColor:[0,119,200]} });
+
+        // Sabatino - next page
+        doc.addPage('landscape');
+        doc.setFontSize(14);
+        doc.text('Sabatino',14,16);
+        const headS = [['Hora','Sábado']];
+        const bodyS = tiemposSabatino.map((hora,i)=>{
+            const cell = (horarioTemporal.sabatino && horarioTemporal.sabatino[i]) ? horarioTemporal.sabatino[i] : {};
+            if (cell && cell.materiaId && cell.maestroId) {
+                const materia = Storage.get('materias').find(m=>m.id===cell.materiaId);
+                const maestro = Storage.get('maestros').find(m=>m.id===cell.maestroId);
+                return [hora, `${materia ? materia.nombre : ''}\n${maestro ? maestro.nombre : ''}${materia && materia.aula ? '\nAula: '+materia.aula : ''}`];
+            }
+            return [hora,''];
+        });
+        doc.autoTable({ startY: 24, head: headS, body: bodyS, styles:{fontSize:10}, headStyles:{fillColor:[0,119,200]} });
+
+        const carrera = Storage.get('carreras').find(c=>c.id===selectCarreraHorario.value);
+        const fileName = carrera ? `${carrera.nombre}_Horario.pdf` : 'Horario.pdf';
+        doc.save(fileName);
+    });
+}
+
+// Initialization
+function inicializar() {
+    cargarCarrerasSelect();
+    generarTablaHorarioSemanal();
+    generarTablaHorarioSabatino();
+    limpiarHorarioTemporal();
+    cargarHorariosGuardadosSelect();
+    loadCarreras();
+    loadMaterias();
+    loadMaestros();
+}
+
+inicializar();
+
+// Update horarioTemporal from DOM
+function actualizarHorarioTemporal() {
+    // ensure structure
+    horarioTemporal.semanal = { lunes: [], martes: [], miercoles: [], jueves: [], viernes: [] };
+    // semanal
+    const celdasSemanales = document.querySelectorAll('#tabla-horario-semanal .celda-horario');
+    celdasSemanales.forEach(celda => {
+        const dia = celda.dataset.dia;
+        const index = parseInt(celda.dataset.index,10);
+        if (!horarioTemporal.semanal[dia]) horarioTemporal.semanal[dia] = [];
+        while (horarioTemporal.semanal[dia].length <= index) horarioTemporal.
