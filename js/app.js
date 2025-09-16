@@ -504,6 +504,7 @@ function guardarAsignacionModal(celda) {
 
     const materias = safeGetArray('materias');
     const maestros = safeGetArray('maestros');
+    const carreras = safeGetArray('carreras');
     const materia = materias.find(m=>m.id===materiaId);
     const maestro = maestros.find(m=>m.id===maestroId);
     if (!materia || !maestro) { alert('Error al obtener materia o maestro'); return; }
@@ -517,17 +518,30 @@ function guardarAsignacionModal(celda) {
     function scheduleHasConflict(schedule) {
         if (schedule.carreraId === selectCarreraHorario.value) return null; // permitir repeticiones dentro de la misma carrera
 
+        // verificar conflicto en semanal
         if (schedule.semanal && dia !== 'sabado') {
             const arr = schedule.semanal[dia] || [];
             const cell = arr[index];
             if (cell && cell.maestroId === maestroId) {
-                return { type:'maestro', schedule };
+                return { 
+                    type:'Maestro', 
+                    dia: dia, 
+                    hora: tiemposSemana[index], 
+                    carrera: (carreras.find(c=>c.id===schedule.carreraId)?.nombre || 'Carrera desconocida')
+                };
             }
         }
+
+        // verificar conflicto en sabatino
         if (schedule.sabatino && dia === 'sabado') {
             const cell = schedule.sabatino[index];
             if (cell && cell.maestroId === maestroId) {
-                return { type:'maestro', schedule };
+                return { 
+                    type:'Maestro', 
+                    dia: 'sabado', 
+                    hora: tiemposSabatino[index], 
+                    carrera: (carreras.find(c=>c.id===schedule.carreraId)?.nombre || 'Carrera desconocida')
+                };
             }
         }
         return null;
@@ -537,7 +551,7 @@ function guardarAsignacionModal(celda) {
     for (let s of horariosGuardados) {
         const conflict = scheduleHasConflict(s);
         if (conflict) {
-            alert(`Conflicto detectado: el maestro ya está ocupado a esta hora en otra carrera.`);
+            alert(`⚠️ Empalme detectado:\n\nTipo: ${conflict.type}\nDía: ${conflict.dia}\nHora: ${conflict.hora}\nCarrera: ${conflict.carrera}`);
             return;
         }
     }
