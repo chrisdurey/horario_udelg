@@ -24,7 +24,7 @@ navButtons.forEach(button => {
     });
 });
 
-// Generate unique ID
+// Generate unique ID1
 function generateId() {
     return '_' + Math.random().toString(36).substr(2, 9);
 }
@@ -508,82 +508,48 @@ function guardarAsignacionModal(celda) {
     const maestro = maestros.find(m=>m.id===maestroId);
     if (!materia || !maestro) { alert('Error al obtener materia o maestro'); return; }
 
-    // Determine slot descriptor
     const dia = celda.dataset.dia;
     const index = parseInt(celda.dataset.index,10);
-    const horarioKey = (dia === 'sabado') ? `sab-${index}` : `${dia}-${index}`;
 
-    // Conflict detection across all saved horarios and current temporal horario
     const horariosGuardados = safeGetArray('horarios');
-    // function to check if given schedule object has conflict with this slot
+
+    // función que verifica conflictos, pero ignora la misma carrera
     function scheduleHasConflict(schedule) {
-        // semanal
-        if (schedule.semanal) {
-            const days = ['lunes','martes','miercoles','jueves','viernes'];
-            for (let d of days) {
-                const arr = schedule.semanal[d] || [];
-                const cell = arr[index];
-                if (!cell) continue;
-                if (cell.maestroId === maestroId) return { type:'maestro', schedule };
-                if (cell.materiaId === materiaId) return { type:'materia', schedule };
-                // check aula conflict if materia exists and has aula
-                const mat = (cell.materiaId) ? safeGetArray('materias').find(m=>m.id===cell.materiaId) : null;
-                if (mat && mat.aula && materia.aula && mat.aula === materia.aula) return { type:'aula', schedule };
+        if (schedule.carreraId === selectCarreraHorario.value) return null; // permitir repeticiones dentro de la misma carrera
+
+        if (schedule.semanal && dia !== 'sabado') {
+            const arr = schedule.semanal[dia] || [];
+            const cell = arr[index];
+            if (cell && cell.maestroId === maestroId) {
+                return { type:'maestro', schedule };
             }
         }
-        // sabatino
-        if (schedule.sabatino) {
+        if (schedule.sabatino && dia === 'sabado') {
             const cell = schedule.sabatino[index];
-            if (cell) {
-                if (cell.maestroId === maestroId) return { type:'maestro', schedule };
-                if (cell.materiaId === materiaId) return { type:'materia', schedule };
-                const mat = (cell.materiaId) ? safeGetArray('materias').find(m=>m.id===cell.materiaId) : null;
-                if (mat && mat.aula && materia.aula && mat.aula === materia.aula) return { type:'aula', schedule };
+            if (cell && cell.maestroId === maestroId) {
+                return { type:'maestro', schedule };
             }
         }
         return null;
     }
 
-    // Check within saved schedules
+    // validar contra todos los horarios guardados
     for (let s of horariosGuardados) {
         const conflict = scheduleHasConflict(s);
         if (conflict) {
-            alert(`Conflicto detectado: ${conflict.type.toUpperCase()} ya ocupado en otro horario guardado.`);
+            alert(`Conflicto detectado: el maestro ya está ocupado a esta hora en otra carrera.`);
             return;
         }
     }
 
-    // Also check current temporal horario to avoid double-assigning a teacher to two different slots at same time across days
-    // Check teacher not assigned in same index on other days in horarioTemporal
-    const days = ['lunes','martes','miercoles','jueves','viernes'];
-    for (let d of days) {
-        const arr = horarioTemporal.semanal[d] || [];
-        const cell = arr[index];
-        if (cell && cell.maestroId === maestroId && celda.dataset.dia !== d) {
-            alert('Conflicto detectado: el maestro ya tiene asignada otra clase a la misma hora en este horario temporal.');
-            return;
-        }
-        if (cell && cell.materiaId === materiaId && celda.dataset.dia !== d) {
-            alert('Conflicto detectado: la materia está asignada en este horario temporal en la misma franja horaria.');
-            return;
-        }
-    }
-    // For sabatino check
-    const sabCell = horarioTemporal.sabatino[index];
-    if (celda.dataset.dia === 'sabado') {
-        if (sabCell && (sabCell.maestroId === maestroId || sabCell.materiaId === materiaId)){
-            alert('Conflicto detectado en horario sabatino temporal.');
-            return;
-        }
-    }
-
-    // If passes checks, assign to cell
+    // si pasa validación, asignar
     celda.dataset.materiaId = materiaId;
     celda.dataset.maestroId = maestroId;
     celda.innerHTML = `<strong>${materia.nombre}</strong><br><small>${maestro.nombre} - ${materia.aula || ''}</small>`;
 
     actualizarHorarioTemporal();
 }
+
 
 // Update horarioTemporal from DOM
 function actualizarHorarioTemporal() {
